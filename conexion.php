@@ -3,10 +3,10 @@
 date_default_timezone_set('America/Caracas');
 
 // 2. CONEXIÓN INTELIGENTE (Lee de Easypanel en la nube, o usa XAMPP en tu PC)
-$host     = getenv('DB_HOST') ?: "localhost";
+$host     = getenv('DB_HOST') ?: "mysql-db";
 $user     = getenv('DB_USER') ?: "root";
 $password = getenv('DB_PASS') !== false ? getenv('DB_PASS') : "";
-$database = getenv('DB_NAME') ?: "punto_venta";
+$database = getenv('DB_NAME') ?: "agrosuministro_la_milagrosa";
 
 $conexion = new mysqli($host, $user, $password, $database);
 
