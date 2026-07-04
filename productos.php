@@ -11,9 +11,22 @@
     $tab_activa = isset($_GET['tab']) ? $_GET['tab'] : 'inventario';
 
     // =========================================================================
-    // 2. AUTO-PARCHE DE BASE DE DATOS
+    // 2. AUTO-PARCHE DE BASE DE DATOS (INCLUYE FAMILIAS)
     // =========================================================================
+    $conexion->query("CREATE TABLE IF NOT EXISTS familias (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        nombre VARCHAR(100) NOT NULL UNIQUE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    $check_fam = $conexion->query("SELECT id FROM familias LIMIT 1");
+    if ($check_fam && $check_fam->num_rows == 0) {
+        $conexion->query("INSERT IGNORE INTO familias (nombre) VALUES 
+        ('Medicina Veterinaria'), ('Alimentos y Concentrados'), ('Venenos y Herbicidas'), 
+        ('Ferretería e Implementos'), ('Repuestos y Maquinaria'), ('Semillas y Abonos')");
+    }
+
     $columnas_nuevas = [
+        'familia_id' => "INT NULL",
         'stock_minimo' => "DECIMAL(10,2) NOT NULL DEFAULT 5.00",
         'fecha_vencimiento' => "DATE NULL",
         'proveedor_id' => "INT NULL",
@@ -38,7 +51,46 @@
     )");
 
     // =========================================================================
-    // 3. PROCESAR ACCIONES DEL INVENTARIO
+    // 3. PROCESAR ACCIONES DE FAMILIAS (NUEVO CRUD)
+    // =========================================================================
+    if (isset($_POST['crear_familia_directa'])) {
+        $nom_fam = $conexion->real_escape_string(trim($_POST['nombre_familia']));
+        if (!empty($nom_fam)) {
+            $q_f = "INSERT INTO familias (nombre) VALUES ('$nom_fam')";
+            if ($conexion->query($q_f)) {
+                header("Location: productos.php?tab=familias&msg=fam_creada"); exit;
+            } else {
+                $mensaje = "❌ Error: Esa categoría ya existe.";
+            }
+        }
+    }
+
+    if (isset($_POST['editar_familia'])) {
+        $id_fam = intval($_POST['familia_id_edit']);
+        $nom_fam = $conexion->real_escape_string(trim($_POST['nombre_familia']));
+        if (!empty($nom_fam)) {
+            $q_fe = "UPDATE familias SET nombre='$nom_fam' WHERE id=$id_fam";
+            if ($conexion->query($q_fe)) {
+                header("Location: productos.php?tab=familias&msg=fam_editada"); exit;
+            } else {
+                $mensaje = "❌ Error al actualizar categoría: " . $conexion->error;
+            }
+        }
+    }
+
+    if (isset($_POST['eliminar_familia'])) {
+        $id_fam = intval($_POST['familia_id_eliminar']);
+        // Desvincular productos primero para no generar errores de integridad
+        $conexion->query("UPDATE productos SET familia_id = NULL WHERE familia_id = $id_fam");
+        if ($conexion->query("DELETE FROM familias WHERE id = $id_fam")) {
+            header("Location: productos.php?tab=familias&msg=fam_eliminada"); exit;
+        } else {
+            $mensaje = "❌ Error al eliminar la categoría.";
+        }
+    }
+
+    // =========================================================================
+    // 4. PROCESAR ACCIONES DEL INVENTARIO
     // =========================================================================
     if (isset($_POST['guardar_producto_integrado'])) {
         $codigo = $conexion->real_escape_string($_POST['codigo_barras']);
@@ -51,14 +103,15 @@
         $stock_inicial = floatval($_POST['stock_inicial']);
         $stock_minimo = floatval($_POST['stock_minimo']);
         $prov_id = !empty($_POST['proveedor_id']) ? intval($_POST['proveedor_id']) : "NULL";
+        $fam_id  = !empty($_POST['familia_id']) ? intval($_POST['familia_id']) : "NULL";
         $f_vence = !empty($_POST['fecha_vencimiento']) ? "'" . $conexion->real_escape_string($_POST['fecha_vencimiento']) . "'" : "NULL";
 
         $check_code = $conexion->query("SELECT id FROM productos WHERE codigo_barras = '$codigo'");
         if ($check_code && $check_code->num_rows > 0) {
             $mensaje = "❌ Error: Ya existe un producto con el código '$codigo'.";
         } else {
-            $q_insert = "INSERT INTO productos (codigo_barras, nombre, precio_usd, precio_mayor_bcv, precio_efectivo_detal, precio_efectivo_mayor, tipo_unidad, stock, stock_minimo, proveedor_id, fecha_vencimiento) 
-                        VALUES ('$codigo', '$nombre', $precio, $p_mayor_bcv, $p_efectivo_detal, $p_efectivo_mayor, '$unidad', $stock_inicial, $stock_minimo, $prov_id, $f_vence)";
+            $q_insert = "INSERT INTO productos (codigo_barras, nombre, precio_usd, precio_mayor_bcv, precio_efectivo_detal, precio_efectivo_mayor, tipo_unidad, stock, stock_minimo, proveedor_id, familia_id, fecha_vencimiento) 
+                        VALUES ('$codigo', '$nombre', $precio, $p_mayor_bcv, $p_efectivo_detal, $p_efectivo_mayor, '$unidad', $stock_inicial, $stock_minimo, $prov_id, $fam_id, $f_vence)";
             if ($conexion->query($q_insert)) $mensaje = "✅ Producto registrado con éxito.";
             else $mensaje = "❌ Error al guardar: " . $conexion->error;
         }
@@ -76,13 +129,14 @@
         $stock_actual = floatval($_POST['stock_actual']); 
         $stock_minimo = floatval($_POST['stock_minimo']);
         $prov_id = !empty($_POST['proveedor_id']) ? intval($_POST['proveedor_id']) : "NULL";
+        $fam_id  = !empty($_POST['familia_id']) ? intval($_POST['familia_id']) : "NULL";
         $f_vence = !empty($_POST['fecha_vencimiento']) ? "'" . $conexion->real_escape_string($_POST['fecha_vencimiento']) . "'" : "NULL";
 
         $check_code = $conexion->query("SELECT id FROM productos WHERE codigo_barras = '$codigo' AND id != $id_edit");
         if ($check_code && $check_code->num_rows > 0) {
             $mensaje = "❌ Error: El código '$codigo' ya está siendo usado.";
         } else {
-            $q_update = "UPDATE productos SET codigo_barras='$codigo', nombre='$nombre', precio_usd=$precio, precio_mayor_bcv=$p_mayor_bcv, precio_efectivo_detal=$p_efectivo_detal, precio_efectivo_mayor=$p_efectivo_mayor, tipo_unidad='$unidad', stock=$stock_actual, stock_minimo=$stock_minimo, proveedor_id=$prov_id, fecha_vencimiento=$f_vence WHERE id=$id_edit";
+            $q_update = "UPDATE productos SET codigo_barras='$codigo', nombre='$nombre', precio_usd=$precio, precio_mayor_bcv=$p_mayor_bcv, precio_efectivo_detal=$p_efectivo_detal, precio_efectivo_mayor=$p_efectivo_mayor, tipo_unidad='$unidad', stock=$stock_actual, stock_minimo=$stock_minimo, proveedor_id=$prov_id, familia_id=$fam_id, fecha_vencimiento=$f_vence WHERE id=$id_edit";
             if ($conexion->query($q_update)) $mensaje = "✏️ Datos actualizados correctamente.";
             else $mensaje = "❌ Error al actualizar: " . $conexion->error;
         }
@@ -105,10 +159,8 @@
     }
 
     // =========================================================================
-    // 4. PROCESAR ACCIONES DE RECETAS Y COMBOS
+    // 5. PROCESAR ACCIONES DE RECETAS Y COMBOS
     // =========================================================================
-    
-    // Crear un Combo Maestro Nuevo
     if (isset($_POST['crear_combo_directo'])) {
         $nombre_combo = $conexion->real_escape_string(trim($_POST['nombre_combo']));
         $precio_combo = floatval($_POST['precio_combo']);
@@ -123,7 +175,6 @@
         }
     }
 
-    // Editar un Combo Maestro (Nombre y Precio)
     if (isset($_POST['editar_combo_maestro'])) {
         $id_combo = intval($_POST['combo_id_edit']);
         $nombre_combo = $conexion->real_escape_string(trim($_POST['nombre_combo']));
@@ -138,7 +189,6 @@
         }
     }
 
-    // Eliminar un Combo Maestro Completo
     if (isset($_POST['eliminar_combo_maestro'])) {
         $id_combo = intval($_POST['combo_id_eliminar']);
         $conexion->query("DELETE FROM combo_detalles WHERE combo_id = $id_combo");
@@ -153,7 +203,6 @@
         }
     }
 
-    // Asignar ingredientes a un combo
     if (isset($_POST['agregar_ingrediente'])) {
         $combo_id = intval($_POST['combo_id']);
         $ingrediente_id = intval($_POST['ingrediente_id']);
@@ -171,14 +220,12 @@
         }
     }
 
-    // Quitar ingrediente de un combo
     if (isset($_GET['eliminar_detalle'])) {
         $id_detalle = intval($_GET['eliminar_detalle']);
         $conexion->query("DELETE FROM combo_detalles WHERE id = $id_detalle");
         header("Location: productos.php?tab=combos&msg=eliminado"); exit;
     }
 
-    // Mensajes de confirmación
     if (isset($_GET['msg'])) {
         if ($_GET['msg'] == 'eliminado') $mensaje = "🗑️ Ingrediente removido del combo.";
         if ($_GET['msg'] == 'agregado') $mensaje = "✅ Ingrediente añadido exitosamente a la receta.";
@@ -186,11 +233,13 @@
         if ($_GET['msg'] == 'combo_editado') $mensaje = "✏️ Datos del combo actualizados.";
         if ($_GET['msg'] == 'combo_eliminado') $mensaje = "🗑️ Combo eliminado del sistema por completo.";
         if ($_GET['msg'] == 'error_eliminar') $mensaje = "❌ No se puede borrar este combo porque ya tiene ventas registradas en el historial.";
-        $tab_activa = 'combos';
+        if ($_GET['msg'] == 'fam_creada') { $mensaje = "📁 ¡Categoría agregada exitosamente!"; $tab_activa = 'familias'; }
+        if ($_GET['msg'] == 'fam_editada') { $mensaje = "✏️ Categoría actualizada."; $tab_activa = 'familias'; }
+        if ($_GET['msg'] == 'fam_eliminada') { $mensaje = "🗑️ Categoría eliminada del inventario."; $tab_activa = 'familias'; }
     }
 
     // =========================================================================
-    // 5. CONSULTAS BASE PARA LA VISTA
+    // 6. CONSULTAS BASE PARA LA VISTA
     // =========================================================================
     $query_tasa = "SELECT tasa_dia FROM configuracion ORDER BY id DESC LIMIT 1";
     $tasa = ($res = $conexion->query($query_tasa)) ? ($res->fetch_assoc()['tasa_dia'] ?? 36.50) : 36.50;
@@ -203,9 +252,13 @@
     $lista_proveedores = $conexion->query("SELECT id, empresa FROM proveedores ORDER BY empresa ASC");
     if ($lista_proveedores) { while($pr = $lista_proveedores->fetch_assoc()) { $prov_array[] = $pr; } }
 
+    $fam_array = [];
+    $lista_familias = $conexion->query("SELECT f.*, COUNT(p.id) as total_prods FROM familias f LEFT JOIN productos p ON p.familia_id = f.id GROUP BY f.id ORDER BY f.nombre ASC");
+    if ($lista_familias) { while($fm = $lista_familias->fetch_assoc()) { $fam_array[] = $fm; } }
+
     $lista_productos_combo = [];
     $lista_combos_maestros = [];
-    $resultado_productos = $conexion->query("SELECT p.*, prov.empresa as nombre_proveedor FROM productos p LEFT JOIN proveedores prov ON p.proveedor_id = prov.id ORDER BY p.nombre ASC");
+    $resultado_productos = $conexion->query("SELECT p.*, prov.empresa as nombre_proveedor, fam.nombre as nombre_familia FROM productos p LEFT JOIN proveedores prov ON p.proveedor_id = prov.id LEFT JOIN familias fam ON p.familia_id = fam.id ORDER BY p.nombre ASC");
     
     if ($resultado_productos) {
         while($p = $resultado_productos->fetch_assoc()) { 
@@ -229,7 +282,6 @@
     <title>Inventario y Combos - Mi Negocio POS</title>
     <link rel="stylesheet" href="css/style.css?v=<?php echo time(); ?>">
     <style>
-        /* TABLA COMPACTA Y ELEGANTE */
         table#tabla-productos { border-collapse: collapse; width: 100%; }
         table#tabla-productos th, table#tabla-productos td { padding: 8px 12px; vertical-align: middle; border-bottom: 1px solid #e2e8f0; font-size: 0.95rem; }
         table#tabla-productos th { background-color: #f8fafc; color: #475569; font-size: 0.85rem; text-transform: uppercase; }
@@ -250,9 +302,17 @@
         .btn-tab:hover { color: #1e3a8a; }
         .btn-tab.activo { color: #3b82f6; border-bottom-color: #3b82f6; }
 
+        /* ==========================================
+           DISEÑO ULTRA COMPACTO DE LOS MODALES
+           ========================================== */
+        .modal-caja-compacto { max-width: 620px !important; padding: 1.2rem 1.5rem !important; background: white; border-radius: 10px; max-height: 90vh; overflow-y: auto; }
+        .modal-caja-compacto label { font-size: 0.8rem; font-weight: bold; margin-bottom: 0.2rem; display: block; color: #334155; }
+        .modal-caja-compacto input, .modal-caja-compacto select { padding: 0.45rem 0.6rem !important; font-size: 0.85rem !important; }
+        .seccion-compacta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-bottom: 0.7rem; background: #f8fafc; padding: 0.6rem; border-radius: 6px; border: 1px solid #e2e8f0; }
+
         @media print {
             body { background: white !important; color: black !important; padding: 0 !important; font-family: Arial, sans-serif !important; }
-            .top-bar, .tabs-contenedor, .tarjeta-capital, .ocultar-impresion, .btn-login, .barra-filtros, form, .badge-rol, .btn-accion, #panel-combos, .modal-fondo { display: none !important; }
+            .top-bar, .tabs-contenedor, .tarjeta-capital, .ocultar-impresion, .btn-login, .barra-filtros, form, .badge-rol, .btn-accion, #panel-combos, #panel-familias, .modal-fondo { display: none !important; }
             .contenedor-menu { max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
             table#tabla-productos { border-collapse: collapse !important; width: 100% !important; margin-top: 10px !important; }
             table#tabla-productos th, table#tabla-productos td { border: 1px solid #000 !important; padding: 6px !important; color: black !important; font-size: 14px !important; text-align: left; }
@@ -281,12 +341,10 @@
 
         <div class="tabs-contenedor ocultar-impresion">
             <button id="btn-tab-inventario" class="btn-tab <?php echo ($tab_activa == 'inventario') ? 'activo' : ''; ?>" onclick="cambiarTab('inventario')">📦 Inventario General</button>
-            <button id="btn-tab-combos" class="btn-tab <?php echo ($tab_activa == 'combos') ? 'activo' : ''; ?>" onclick="cambiarTab('combos')">🍔 Recetas y Combos</button>
+            <button id="btn-tab-combos" class="btn-tab <?php echo ($tab_activa == 'combos') ? 'activo' : ''; ?>" onclick="cambiarTab('combos')"> 🐓Recetas y Combos</button>
+            <button id="btn-tab-familias" class="btn-tab <?php echo ($tab_activa == 'familias') ? 'activo' : ''; ?>" onclick="cambiarTab('familias')">📁 Familias / Categorías</button>
         </div>
 
-        <!-- ========================================== -->
-        <!-- PANEL 1: INVENTARIO GENERAL -->
-        <!-- ========================================== -->
         <div id="panel-inventario" style="display: <?php echo ($tab_activa == 'inventario') ? 'block' : 'none'; ?>;">
             
             <div class="tarjeta-capital ocultar-impresion" style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 1.5rem; border-left: 5px solid #10b981; display: inline-block; min-width: 320px;">
@@ -302,12 +360,18 @@
             </div>
 
             <div class="barra-filtros ocultar-impresion">
-                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1rem;">
+                <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem;">
                     <input type="text" id="buscar-tabla" placeholder="🔍 Escanear código o buscar artículo..." class="input-cliente" style="width: 100%; padding: 0.7rem; box-sizing: border-box;" onkeyup="filtrarInventario()">
                     <select id="filtro-proveedor" class="input-cliente" style="width: 100%; padding: 0.7rem;" onchange="filtrarInventario()">
                         <option value="">🏢 Filtrar por Proveedor</option>
                         <?php foreach($prov_array as $pr): ?>
                             <option value="<?php echo $pr['id']; ?>"><?php echo htmlspecialchars($pr['empresa']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <select id="filtro-familia" class="input-cliente" style="width: 100%; padding: 0.7rem; font-weight: bold; color: #15803d;" onchange="filtrarInventario()">
+                        <option value="">📁 Todas las Familias</option>
+                        <?php foreach($fam_array as $fm): ?>
+                            <option value="<?php echo $fm['id']; ?>"><?php echo htmlspecialchars($fm['nombre']); ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -335,17 +399,20 @@
                 <table class="tabla-inventario" id="tabla-productos">
                     <thead>
                         <tr>
-                            <th style="width: 15%;">CÓDIGO</th>
-                            <th style="width: 35%;">NOMBRE DEL PRODUCTO</th>
+                            <th style="width: 4%; text-align: center;">#</th>
+                            <th style="width: 12%;">CÓDIGO</th>
+                            <th style="width: 26%;">NOMBRE DEL PRODUCTO</th>
+                            <th style="width: 14%;">FAMILIA</th>
                             <th class="ocultar-impresion">PROVEEDOR</th>
-                            <th style="width: 10%;">DISP.</th>
-                            <th class="ocultar-impresion" style="width: 12%;">VENCIMIENTO</th>
-                            <th style="width: 15%;" class="col-precio-print">PRECIO ($ BCV)</th>
-                            <th style="text-align: center; width: 10%;" class="ocultar-impresion">ACCIONES</th>
+                            <th style="width: 9%;">DISP.</th>
+                            <th class="ocultar-impresion" style="width: 11%;">VENCIMIENTO</th>
+                            <th style="width: 13%;" class="col-precio-print">PRECIO ($ BCV)</th>
+                            <th style="text-align: center; width: 8%;" class="ocultar-impresion">ACCIONES</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php 
+                        $contador = 1;
                         if ($resultado_productos && $resultado_productos->num_rows > 0):
                             $hoy = date('Y-m-d');
                             $limite_alerta = date('Y-m-d', strtotime('+30 days'));
@@ -372,10 +439,12 @@
                                     elseif ($producto['fecha_vencimiento'] <= $limite_alerta) { $vence_status = 'por_vencer'; $vence_color = '#d97706'; }
                                 }
                         ?>
-                            <tr class="fila-producto" data-prov-id="<?php echo $producto['proveedor_id']; ?>" data-stock-status="<?php echo $stock_status; ?>" data-vence-status="<?php echo $vence_status; ?>">
+                            <tr class="fila-producto" data-prov-id="<?php echo $producto['proveedor_id']; ?>" data-fam-id="<?php echo $producto['familia_id']; ?>" data-stock-status="<?php echo $stock_status; ?>" data-vence-status="<?php echo $vence_status; ?>">
                                 
+                                <td class="col-num" style="text-align: center; font-weight: bold; color: #64748b;"><?php echo $contador++; ?></td>
                                 <td class="col-codigo" style="font-family: monospace; color: #475569;"><?php echo htmlspecialchars($producto['codigo_barras']); ?></td>
                                 <td class="col-nombre" style="font-weight: bold; color: #1e293b;"><?php echo htmlspecialchars($producto['nombre']); ?></td>
+                                <td><span style="background: #e2e8f0; padding: 3px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: bold; color: #334155;"><?php echo htmlspecialchars($producto['nombre_familia'] ?: 'Sin Asignar'); ?></span></td>
                                 <td class="ocultar-impresion" style="font-size: 0.85rem; color: #64748b;"><?php echo $producto['nombre_proveedor'] ?: '<em>S/N</em>'; ?></td>
                                 
                                 <td>
@@ -392,7 +461,7 @@
                                 </td>
                                 
                                 <td class="ocultar-impresion" style="display: flex; gap: 0.4rem; justify-content: center;">
-                                    <button class="btn-accion" title="Editar / Ver todos los precios" onclick="abrirModalEditar(<?php echo $id_prod; ?>, '<?php echo addslashes($producto['codigo_barras']); ?>', '<?php echo addslashes($producto['nombre']); ?>', <?php echo $producto['precio_usd']; ?>, <?php echo $stock_db; ?>, <?php echo $minimo; ?>, '<?php echo $producto['proveedor_id']; ?>', '<?php echo $fecha_cruda; ?>', '<?php echo $producto['tipo_unidad']; ?>', <?php echo $producto['precio_mayor_bcv']; ?>, <?php echo $producto['precio_efectivo_detal']; ?>, <?php echo $producto['precio_efectivo_mayor']; ?>)">✏️</button>
+                                    <button class="btn-accion" title="Editar / Ver todos los precios" onclick="abrirModalEditar(<?php echo $id_prod; ?>, '<?php echo addslashes($producto['codigo_barras']); ?>', '<?php echo addslashes($producto['nombre']); ?>', <?php echo $producto['precio_usd']; ?>, <?php echo $stock_db; ?>, <?php echo $minimo; ?>, '<?php echo $producto['proveedor_id']; ?>', '<?php echo $producto['familia_id']; ?>', '<?php echo $fecha_cruda; ?>', '<?php echo $producto['tipo_unidad']; ?>', <?php echo $producto['precio_mayor_bcv']; ?>, <?php echo $producto['precio_efectivo_detal']; ?>, <?php echo $producto['precio_efectivo_mayor']; ?>)">✏️</button>
                                     <form method="POST" style="margin: 0; padding: 0;" onsubmit="return confirm('¿Seguro deseas ELIMINAR esto?');">
                                         <input type="hidden" name="producto_id_eliminar" value="<?php echo $id_prod; ?>">
                                         <button type="submit" name="eliminar_producto" class="btn-accion" style="color: #ef4444; border-color: #fca5a5;" title="Eliminar">❌</button>
@@ -400,39 +469,34 @@
                                 </td>
                             </tr>
                         <?php endwhile; else: ?>
-                            <tr><td colspan="7" style="text-align: center; padding: 2rem;">No hay productos registrados.</td></tr>
+                            <tr><td colspan="9" style="text-align: center; padding: 2rem;">No hay productos registrados.</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
             </div>
         </div>
 
-        <!-- ========================================== -->
-        <!-- PANEL 2: RECETAS Y COMBOS (NUEVO DISEÑO LÓGICO) -->
-        <!-- ========================================== -->
         <div id="panel-combos" class="ocultar-impresion" style="display: <?php echo ($tab_activa == 'combos') ? 'block' : 'none'; ?>;">
             
             <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 2rem;">
                 
-                <!-- PASO 1: CREAR EL COMBO -->
                 <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-top: 5px solid #3b82f6; height: fit-content;">
                     <h3 style="margin-bottom: 0.5rem; color: #1e3a8a;">1️⃣ Crear Nuevo Combo</h3>
                     <p style="color: #64748b; font-size: 0.85rem; margin-bottom: 1rem;">Dale un nombre y un precio especial a tu combo. Luego podrás asignarle los ingredientes al lado derecho.</p>
                     
                     <form method="POST" action="productos.php?tab=combos">
                         <div style="margin-bottom: 1rem;">
-                            <label style="font-weight: bold; font-size: 0.85rem;">Nombre del Combo (Ej: Hamburguesa + Refresco):</label>
+                            <label style="font-weight: bold; font-size: 0.85rem;">Nombre del Combo:</label>
                             <input type="text" name="nombre_combo" required class="input-cliente" style="width: 100%; padding: 0.8rem; box-sizing: border-box;" placeholder="Escribe el nombre aquí...">
                         </div>
                         <div style="margin-bottom: 1rem;">
-                            <label style="font-weight: bold; font-size: 0.85rem; color: #065f46;">Precio Especial de Venta ($ BCV):</label>
+                            <label style="font-weight: bold; font-size: 0.85rem; color: #065f46;">Precio Especial ($ BCV):</label>
                             <input type="number" step="0.01" name="precio_combo" required class="input-cliente" style="width: 100%; padding: 0.8rem; box-sizing: border-box;" placeholder="Ej: 5.00">
                         </div>
                         <button type="submit" name="crear_combo_directo" class="btn-login" style="background: #3b82f6; width: 100%; margin: 0; padding: 0.8rem;">Crear Combo</button>
                     </form>
                 </div>
 
-                <!-- PASO 2: ASIGNAR INGREDIENTES A COMBOS EXISTENTES -->
                 <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-top: 5px solid #f59e0b;">
                     <h3 style="margin-bottom: 0.5rem; color: #d97706;">2️⃣ Armar la Receta del Combo</h3>
                     <p style="color: #64748b; font-size: 0.85rem; margin-bottom: 1rem;">
@@ -469,10 +533,7 @@
                 </div>
             </div>
 
-            <!-- GRILLA DE GESTIÓN (MIS COMBOS Y RECETAS ARMADAS) -->
             <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 2rem; margin-top: 2rem;">
-                
-                <!-- TABLA MIS COMBOS (Editar y Borrar Combos) -->
                 <div style="background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow: hidden; align-self: start;">
                     <h3 style="padding: 1.5rem; margin: 0; background: #f8fafc; border-bottom: 2px solid #e2e8f0; color: #1e3a8a;">🍔 Mis Combos (Gestión)</h3>
                     <table style="width: 100%; border-collapse: collapse; text-align: left;">
@@ -505,7 +566,6 @@
                     </table>
                 </div>
 
-                <!-- TABLA RECETAS ARMADAS -->
                 <div style="background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow: hidden; align-self: start;">
                     <h3 style="padding: 1.5rem; margin: 0; background: #f8fafc; border-bottom: 2px solid #e2e8f0; color: #d97706;">📋 Ingredientes por Combo</h3>
                     <table style="width: 100%; border-collapse: collapse; text-align: left;">
@@ -537,130 +597,194 @@
                         </tbody>
                     </table>
                 </div>
+            </div>
+        </div>
+
+        <div id="panel-familias" class="ocultar-impresion" style="display: <?php echo ($tab_activa == 'familias') ? 'block' : 'none'; ?>;">
+            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 2rem;">
+                
+                <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-top: 5px solid #10b981; height: fit-content;">
+                    <h3 style="margin-bottom: 0.5rem; color: #065f46;">📁 Agregar Categoría</h3>
+                    <p style="color: #64748b; font-size: 0.85rem; margin-bottom: 1rem;">Crea nuevas familias para organizar mejor el inventario físico y las auditorías de tu negocio.</p>
+                    
+                    <form method="POST" action="productos.php?tab=familias">
+                        <div style="margin-bottom: 1rem;">
+                            <label style="font-weight: bold; font-size: 0.85rem;">Nombre de la Familia / Categoría:</label>
+                            <input type="text" name="nombre_familia" required class="input-cliente" style="width: 100%; padding: 0.8rem; box-sizing: border-box;" placeholder="Ej: Medicina Veterinaria">
+                        </div>
+                        <button type="submit" name="crear_familia_directa" class="btn-login" style="background: #10b981; width: 100%; margin: 0; padding: 0.8rem;">+ Agregar Categoría</button>
+                    </form>
+                </div>
+
+                <div style="background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow: hidden; align-self: start;">
+                    <h3 style="padding: 1.5rem; margin: 0; background: #f8fafc; border-bottom: 2px solid #e2e8f0; color: #1e293b;">📋 Categorías Activas en el Sistema</h3>
+                    <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                        <thead>
+                            <tr>
+                                <th style="padding: 1rem; background: white; border-bottom: 1px solid #e2e8f0;">Nombre de Familia</th>
+                                <th style="padding: 1rem; background: white; border-bottom: 1px solid #e2e8f0; text-align: center;">Total Artículos</th>
+                                <th style="padding: 1rem; background: white; border-bottom: 1px solid #e2e8f0; text-align: center;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (count($fam_array) > 0): ?>
+                                <?php foreach ($fam_array as $fm): ?>
+                                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                                        <td style="padding: 1rem; font-weight: bold; color: #1e293b;"><?php echo htmlspecialchars($fm['nombre']); ?></td>
+                                        <td style="padding: 1rem; text-align: center;">
+                                            <span style="background: #d1fae5; color: #065f46; padding: 3px 10px; border-radius: 12px; font-weight: bold; font-size: 0.85rem;">
+                                                <?php echo $fm['total_prods']; ?> prod(s)
+                                            </span>
+                                        </td>
+                                        <td style="padding: 1rem; text-align: center; display: flex; gap: 0.5rem; justify-content: center;">
+                                            <button onclick="abrirModalEditarFamilia(<?php echo $fm['id']; ?>, '<?php echo addslashes($fm['nombre']); ?>')" class="btn-accion" title="Renombrar Categoría">✏️</button>
+                                            <form method="POST" action="productos.php?tab=familias" style="margin: 0;" onsubmit="return confirm('¿Seguro deseas eliminar esta categoría? (Los productos no se borrarán, quedarán sin asignar)');">
+                                                <input type="hidden" name="familia_id_eliminar" value="<?php echo $fm['id']; ?>">
+                                                <button type="submit" name="eliminar_familia" class="btn-accion" style="color: #ef4444; border-color: #fca5a5;" title="Eliminar Categoría">❌</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr><td colspan="3" style="padding: 2rem; text-align: center; color: #64748b;">No hay categorías registradas.</td></tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
 
             </div>
         </div>
 
     </main>
 
-    <!-- ========================================== -->
-    <!-- MODALES DE REGISTRO, EDICIÓN Y ENTRADA -->
-    <!-- ========================================== -->
     <div id="modal-nuevo" class="modal-fondo ocultar-impresion" style="display: none;">
-        <div class="modal-caja" style="max-width: 550px; padding: 2rem; background: white; border-radius: 10px;">
-            <div class="modal-cabecera">
-                <h3 style="color: #1e3a8a; margin: 0;">📦 Registrar Nuevo Artículo</h3>
+        <div class="modal-caja modal-caja-compacto">
+            <div class="modal-cabecera" style="margin-bottom: 0.8rem;">
+                <h3 style="color: #1e3a8a; margin: 0; font-size: 1.1rem;">📦 Registrar Nuevo Artículo</h3>
                 <button class="btn-cerrar" onclick="cerrarModal('modal-nuevo')" style="background: none; border: none; font-size: 1.2rem; cursor: pointer;">X</button>
             </div>
-            <form method="POST" style="margin-top: 1rem;">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
-                    <div><label style="font-size: 0.85rem; font-weight: bold;">Código de Barras</label><input type="text" name="codigo_barras" required class="input-cliente" style="width: 100%; box-sizing: border-box; padding: 0.6rem;"></div>
+            <form method="POST">
+                <div style="display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: 0.6rem; margin-bottom: 0.6rem;">
+                    <div><label>Código Barras</label><input type="text" name="codigo_barras" required class="input-cliente" style="width: 100%; box-sizing: border-box;"></div>
                     <div>
-                        <label style="font-size: 0.85rem; font-weight: bold;">Tipo de Unidad</label>
-                        <select name="tipo_unidad" class="input-cliente" style="width: 100%; padding: 0.6rem;">
+                        <label>Unidad</label>
+                        <select name="tipo_unidad" class="input-cliente" style="width: 100%;">
                             <option value="und">Unidad (Und)</option>
                             <option value="kg">Kilo (Kg)</option>
                             <option value="m">Metros (m)</option>
                         </select>
                     </div>
+                    <div><label style="color: #10b981;">Stock Inicial</label><input type="number" step="0.001" name="stock_inicial" required class="input-cliente" value="0" style="width: 100%; box-sizing: border-box;"></div>
+                    <div><label style="color: #f59e0b;">Alerta Mín.</label><input type="number" step="0.001" name="stock_minimo" required class="input-cliente" value="5" style="width: 100%; box-sizing: border-box;"></div>
                 </div>
 
-                <div style="margin-bottom: 1rem;">
-                    <label style="font-size: 0.85rem; font-weight: bold;">Descripción del Producto</label>
-                    <input type="text" name="nombre" required class="input-cliente" style="width: 100%; box-sizing: border-box; padding: 0.6rem;">
+                <div style="margin-bottom: 0.6rem;">
+                    <label>Descripción del Producto</label>
+                    <input type="text" name="nombre" required class="input-cliente" style="width: 100%; box-sizing: border-box;">
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; background: #f0fdf4; padding: 1rem; border-radius: 6px; border: 1px dashed #bbf7d0;">
-                    <div><label style="font-size: 0.85rem; font-weight: bold; color: #166534;">Precio Detal BCV ($)</label><input type="number" step="0.01" name="precio_usd" required class="input-cliente" style="width: 100%; padding: 0.6rem; box-sizing: border-box;"></div>
-                    <div><label style="font-size: 0.85rem; font-weight: bold; color: #1e40af;">Precio Mayor BCV ($)</label><input type="number" step="0.01" name="precio_mayor_bcv" value="0.00" required class="input-cliente" style="width: 100%; padding: 0.6rem; box-sizing: border-box;"></div>
-                    <div><label style="font-size: 0.85rem; font-weight: bold; color: #9a3412;">Precio Detal Efec ($)</label><input type="number" step="0.01" name="precio_efectivo_detal" value="0.00" required class="input-cliente" style="width: 100%; padding: 0.6rem; box-sizing: border-box;"></div>
-                    <div><label style="font-size: 0.85rem; font-weight: bold; color: #581c87;">Precio Mayor Efec ($)</label><input type="number" step="0.01" name="precio_efectivo_mayor" value="0.00" required class="input-cliente" style="width: 100%; padding: 0.6rem; box-sizing: border-box;"></div>
+                <div class="seccion-compacta" style="background: #f0fdf4; border-color: #bbf7d0;">
+                    <div><label style="color: #166534;">Detal BCV ($)</label><input type="number" step="0.01" name="precio_usd" required class="input-cliente" style="width: 100%; box-sizing: border-box;"></div>
+                    <div><label style="color: #1e40af;">Mayor BCV ($)</label><input type="number" step="0.01" name="precio_mayor_bcv" value="0.00" required class="input-cliente" style="width: 100%; box-sizing: border-box;"></div>
+                    <div><label style="color: #9a3412;">Detal Efec ($)</label><input type="number" step="0.01" name="precio_efectivo_detal" value="0.00" required class="input-cliente" style="width: 100%; box-sizing: border-box;"></div>
+                    <div><label style="color: #581c87;">Mayor Efec ($)</label><input type="number" step="0.01" name="precio_efectivo_mayor" value="0.00" required class="input-cliente" style="width: 100%; box-sizing: border-box;"></div>
                 </div>
 
-                <div style="margin-bottom: 1rem;">
-                    <label style="font-size: 0.85rem; font-weight: bold;">Proveedor</label>
-                    <select name="proveedor_id" class="input-cliente" style="width: 100%; padding: 0.6rem;">
-                        <option value="">-- Ninguno --</option>
-                        <?php foreach($prov_array as $pr): ?>
-                            <option value="<?php echo $pr['id']; ?>"><?php echo htmlspecialchars($pr['empresa']); ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.6rem; margin-bottom: 1rem;">
+                    <div>
+                        <label>Proveedor</label>
+                        <select name="proveedor_id" class="input-cliente" style="width: 100%;">
+                            <option value="">-- Ninguno --</option>
+                            <?php foreach($prov_array as $pr): ?>
+                                <option value="<?php echo $pr['id']; ?>"><?php echo htmlspecialchars($pr['empresa']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="color: #15803d;">Categoría</label>
+                        <select name="familia_id" class="input-cliente" style="width: 100%;">
+                            <option value="">-- Categoría --</option>
+                            <?php foreach($fam_array as $fm): ?>
+                                <option value="<?php echo $fm['id']; ?>"><?php echo htmlspecialchars($fm['nombre']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="color: #ef4444;">Vencimiento</label>
+                        <input type="date" name="fecha_vencimiento" class="input-cliente" style="width: 100%; box-sizing: border-box;">
+                    </div>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; background: #f8fafc; padding: 1rem; border-radius: 6px; border: 1px dashed #cbd5e1;">
-                    <div><label style="font-size: 0.85rem; font-weight: bold; color: #10b981;">Stock Inicial Actual</label><input type="number" step="0.001" name="stock_inicial" required class="input-cliente" value="0" style="width: 100%; padding: 0.6rem; box-sizing: border-box;"></div>
-                    <div><label style="font-size: 0.85rem; font-weight: bold; color: #f59e0b;">Alerta Stock Mínimo</label><input type="number" step="0.001" name="stock_minimo" required class="input-cliente" value="5" style="width: 100%; padding: 0.6rem; box-sizing: border-box;"></div>
-                </div>
-
-                <div style="margin-bottom: 1.5rem;">
-                    <label style="font-size: 0.85rem; font-weight: bold; color: #ef4444;">Fecha de Vencimiento (Opcional)</label>
-                    <input type="date" name="fecha_vencimiento" class="input-cliente" style="width: 100%; box-sizing: border-box; padding: 0.6rem;">
-                </div>
-
-                <button type="submit" name="guardar_producto_integrado" class="btn-login" style="width: 100%; margin: 0; background: #3b82f6; color: white; font-weight: bold; padding: 0.8rem;">Guardar Producto</button>
+                <button type="submit" name="guardar_producto_integrado" class="btn-login" style="width: 100%; margin: 0; background: #3b82f6; color: white; font-weight: bold; padding: 0.7rem;">Guardar Producto</button>
             </form>
         </div>
     </div>
 
     <div id="modal-editar" class="modal-fondo ocultar-impresion" style="display: none;">
-        <div class="modal-caja" style="max-width: 550px; padding: 2rem; background: white; border-radius: 10px;">
-            <div class="modal-cabecera">
-                <h3 style="color: #f59e0b; margin: 0;">✏️ Editar Artículo o Precios</h3>
+        <div class="modal-caja modal-caja-compacto">
+            <div class="modal-cabecera" style="margin-bottom: 0.8rem;">
+                <h3 style="color: #f59e0b; margin: 0; font-size: 1.1rem;">✏️ Editar Artículo o Precios</h3>
                 <button class="btn-cerrar" onclick="cerrarModal('modal-editar')" style="background: none; border: none; font-size: 1.2rem; cursor: pointer;">X</button>
             </div>
-            <form method="POST" style="margin-top: 1rem;">
+            <form method="POST">
                 <input type="hidden" name="producto_id_edit" id="edit-id">
                 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
-                    <div><label style="font-size: 0.85rem; font-weight: bold;">Código Barras</label><input type="text" name="codigo_barras" id="edit-codigo" required class="input-cliente" style="width: 100%; padding: 0.6rem; box-sizing: border-box;"></div>
+                <div style="display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: 0.6rem; margin-bottom: 0.6rem;">
+                    <div><label>Código Barras</label><input type="text" name="codigo_barras" id="edit-codigo" required class="input-cliente" style="width: 100%; box-sizing: border-box;"></div>
                     <div>
-                        <label style="font-size: 0.85rem; font-weight: bold;">Tipo Unidad</label>
-                        <select name="tipo_unidad" id="edit-unidad" class="input-cliente" style="width: 100%; padding: 0.6rem;">
+                        <label>Unidad</label>
+                        <select name="tipo_unidad" id="edit-unidad" class="input-cliente" style="width: 100%;">
                             <option value="und">Unidad (Und)</option>
                             <option value="kg">Kilo (Kg)</option>
                             <option value="m">Metros (m)</option>
                         </select>
                     </div>
+                    <div><label style="color: #b45309;">Stock Actual</label><input type="number" step="0.001" name="stock_actual" id="edit-stock" required class="input-cliente" style="width: 100%; box-sizing: border-box;"></div>
+                    <div><label style="color: #f59e0b;">Alerta Mín.</label><input type="number" step="0.001" name="stock_minimo" id="edit-minimo" required class="input-cliente" style="width: 100%; box-sizing: border-box;"></div>
                 </div>
 
-                <div style="margin-bottom: 1rem;">
-                    <label style="font-size: 0.85rem; font-weight: bold;">Descripción del Producto</label>
-                    <input type="text" name="nombre" id="edit-nombre" required class="input-cliente" style="width: 100%; box-sizing: border-box; padding: 0.6rem;">
+                <div style="margin-bottom: 0.6rem;">
+                    <label>Descripción del Producto</label>
+                    <input type="text" name="nombre" id="edit-nombre" required class="input-cliente" style="width: 100%; box-sizing: border-box;">
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; background: #fffbeb; padding: 1rem; border-radius: 6px; border: 1px dashed #fcd34d;">
-                    <div><label style="font-size: 0.85rem; font-weight: bold; color: #166534;">Precio Detal BCV ($)</label><input type="number" step="0.01" name="precio_usd" id="edit-precio" required class="input-cliente" style="width: 100%; padding: 0.6rem; box-sizing: border-box;"></div>
-                    <div><label style="font-size: 0.85rem; font-weight: bold; color: #1e40af;">Precio Mayor BCV ($)</label><input type="number" step="0.01" name="precio_mayor_bcv" id="edit-precio-mayor-bcv" required class="input-cliente" style="width: 100%; padding: 0.6rem; box-sizing: border-box;"></div>
-                    <div><label style="font-size: 0.85rem; font-weight: bold; color: #9a3412;">Precio Detal Efec ($)</label><input type="number" step="0.01" name="precio_efectivo_detal" id="edit-precio-efectivo-detal" required class="input-cliente" style="width: 100%; padding: 0.6rem; box-sizing: border-box;"></div>
-                    <div><label style="font-size: 0.85rem; font-weight: bold; color: #581c87;">Precio Mayor Efec ($)</label><input type="number" step="0.01" name="precio_efectivo_mayor" id="edit-precio-efectivo-mayor" required class="input-cliente" style="width: 100%; padding: 0.6rem; box-sizing: border-box;"></div>
+                <div class="seccion-compacta" style="background: #fffbeb; border-color: #fcd34d;">
+                    <div><label style="color: #166534;">Detal BCV ($)</label><input type="number" step="0.01" name="precio_usd" id="edit-precio" required class="input-cliente" style="width: 100%; box-sizing: border-box;"></div>
+                    <div><label style="color: #1e40af;">Mayor BCV ($)</label><input type="number" step="0.01" name="precio_mayor_bcv" id="edit-precio-mayor-bcv" required class="input-cliente" style="width: 100%; box-sizing: border-box;"></div>
+                    <div><label style="color: #9a3412;">Detal Efec ($)</label><input type="number" step="0.01" name="precio_efectivo_detal" id="edit-precio-efectivo-detal" required class="input-cliente" style="width: 100%; box-sizing: border-box;"></div>
+                    <div><label style="color: #581c87;">Mayor Efec ($)</label><input type="number" step="0.01" name="precio_efectivo_mayor" id="edit-precio-efectivo-mayor" required class="input-cliente" style="width: 100%; box-sizing: border-box;"></div>
                 </div>
 
-                <div style="margin-bottom: 1rem;">
-                    <label style="font-size: 0.85rem; font-weight: bold;">Proveedor</label>
-                    <select name="proveedor_id" id="edit-proveedor" class="input-cliente" style="width: 100%; padding: 0.6rem;">
-                        <option value="">-- Ninguno --</option>
-                        <?php foreach($prov_array as $pr): ?>
-                            <option value="<?php echo $pr['id']; ?>"><?php echo htmlspecialchars($pr['empresa']); ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.6rem; margin-bottom: 1rem;">
+                    <div>
+                        <label>Proveedor</label>
+                        <select name="proveedor_id" id="edit-proveedor" class="input-cliente" style="width: 100%;">
+                            <option value="">-- Ninguno --</option>
+                            <?php foreach($prov_array as $pr): ?>
+                                <option value="<?php echo $pr['id']; ?>"><?php echo htmlspecialchars($pr['empresa']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="color: #15803d;">Categoría</label>
+                        <select name="familia_id" id="edit-familia" class="input-cliente" style="width: 100%;">
+                            <option value="">-- Categoría --</option>
+                            <?php foreach($fam_array as $fm): ?>
+                                <option value="<?php echo $fm['id']; ?>"><?php echo htmlspecialchars($fm['nombre']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="color: #ef4444;">Vencimiento</label>
+                        <input type="date" name="fecha_vencimiento" id="edit-vence" class="input-cliente" style="width: 100%; box-sizing: border-box;">
+                    </div>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; background: #f8fafc; padding: 1rem; border-radius: 6px; border: 1px solid #cbd5e1;">
-                    <div><label style="font-size: 0.85rem; font-weight: bold; color: #b45309;">Corregir Stock</label><input type="number" step="0.001" name="stock_actual" id="edit-stock" required class="input-cliente" style="width: 100%; padding: 0.6rem; box-sizing: border-box;"></div>
-                    <div><label style="font-size: 0.85rem; font-weight: bold; color: #f59e0b;">Alerta Mínimo</label><input type="number" step="0.001" name="stock_minimo" id="edit-minimo" required class="input-cliente" style="width: 100%; padding: 0.6rem; box-sizing: border-box;"></div>
-                </div>
-
-                <div style="margin-bottom: 1.5rem;">
-                    <label style="font-size: 0.85rem; font-weight: bold; color: #ef4444;">Corregir Vencimiento</label>
-                    <input type="date" name="fecha_vencimiento" id="edit-vence" class="input-cliente" style="width: 100%; box-sizing: border-box; padding: 0.6rem;">
-                </div>
-
-                <button type="submit" name="editar_producto" class="btn-login" style="width: 100%; margin: 0; background: #f59e0b; color: white; font-weight: bold; padding: 0.8rem;">Actualizar Datos</button>
+                <button type="submit" name="editar_producto" class="btn-login" style="width: 100%; margin: 0; background: #f59e0b; color: white; font-weight: bold; padding: 0.7rem;">Actualizar Datos</button>
             </form>
         </div>
     </div>
 
-    <!-- Modal Editar Combo -->
     <div id="modal-editar-combo" class="modal-fondo ocultar-impresion" style="display: none;">
         <div class="modal-caja" style="max-width: 400px; padding: 2rem; background: white; border-radius: 10px; border-top: 5px solid #3b82f6;">
             <div class="modal-cabecera">
@@ -669,23 +793,36 @@
             </div>
             <form method="POST" action="productos.php?tab=combos" style="margin-top: 1rem;">
                 <input type="hidden" name="combo_id_edit" id="edit-combo-id">
-                
                 <div style="margin-bottom: 1rem;">
                     <label style="font-size: 0.85rem; font-weight: bold;">Nombre del Combo:</label>
                     <input type="text" name="nombre_combo" id="edit-combo-nombre" required class="input-cliente" style="width: 100%; box-sizing: border-box; padding: 0.8rem;">
                 </div>
-                
                 <div style="margin-bottom: 1.5rem;">
                     <label style="font-size: 0.85rem; font-weight: bold; color: #065f46;">Precio Especial ($ BCV):</label>
                     <input type="number" step="0.01" name="precio_combo" id="edit-combo-precio" required class="input-cliente" style="width: 100%; box-sizing: border-box; padding: 0.8rem;">
                 </div>
-
                 <button type="submit" name="editar_combo_maestro" class="btn-login" style="width: 100%; margin: 0; background: #3b82f6; color: white; font-weight: bold; padding: 0.8rem;">Actualizar Combo</button>
             </form>
         </div>
     </div>
 
-    <!-- Modal Entrada -->
+    <div id="modal-editar-familia" class="modal-fondo ocultar-impresion" style="display: none;">
+        <div class="modal-caja" style="max-width: 400px; padding: 2rem; background: white; border-radius: 10px; border-top: 5px solid #10b981;">
+            <div class="modal-cabecera">
+                <h3 style="color: #065f46; margin: 0;">✏️ Renombrar Categoría</h3>
+                <button class="btn-cerrar" onclick="cerrarModal('modal-editar-familia')" style="background: none; border: none; font-size: 1.2rem; cursor: pointer;">X</button>
+            </div>
+            <form method="POST" action="productos.php?tab=familias" style="margin-top: 1rem;">
+                <input type="hidden" name="familia_id_edit" id="edit-fam-id">
+                <div style="margin-bottom: 1.5rem;">
+                    <label style="font-size: 0.85rem; font-weight: bold;">Nuevo Nombre:</label>
+                    <input type="text" name="nombre_familia" id="edit-fam-nombre" required class="input-cliente" style="width: 100%; box-sizing: border-box; padding: 0.8rem;">
+                </div>
+                <button type="submit" name="editar_familia" class="btn-login" style="width: 100%; margin: 0; background: #10b981; color: white; font-weight: bold; padding: 0.8rem;">Actualizar</button>
+            </form>
+        </div>
+    </div>
+
     <div id="modal-entrada" class="modal-fondo ocultar-impresion" style="display: none;">
         <div class="modal-caja" style="background: white; padding: 2rem; border-radius: 10px; max-width: 500px;">
             <div class="modal-cabecera">
@@ -717,20 +854,21 @@
     </div>
 
     <script>
-        // Pestañas
-        function cambiarTab(tab) {
+        function changingTab(tab) {
             document.querySelectorAll('.btn-tab').forEach(b => b.classList.remove('activo'));
             document.getElementById('btn-tab-' + tab).classList.add('activo');
             document.getElementById('panel-inventario').style.display = (tab === 'inventario') ? 'block' : 'none';
             document.getElementById('panel-combos').style.display = (tab === 'combos') ? 'block' : 'none';
+            document.getElementById('panel-familias').style.display = (tab === 'familias') ? 'block' : 'none';
             window.history.replaceState(null, '', '?tab=' + tab);
         }
 
-        // Modales
+        function cambiarTab(tab) { changingTab(tab); }
+
         function abrirModal(id) { document.getElementById(id).style.display = 'flex'; }
         function cerrarModal(id) { document.getElementById(id).style.display = 'none'; }
 
-        function abrirModalEditar(id, codigo, nombre, precio, stock, minimo, proveedor, vence, unidad, p_mayor_bcv, p_efec_detal, p_efec_mayor) {
+        function abrirModalEditar(id, codigo, nombre, precio, stock, minimo, proveedor, familia, vence, unidad, p_mayor_bcv, p_efec_detal, p_efec_mayor) {
             document.getElementById('edit-id').value = id;
             document.getElementById('edit-codigo').value = codigo;
             document.getElementById('edit-nombre').value = nombre;
@@ -738,6 +876,7 @@
             document.getElementById('edit-stock').value = stock;
             document.getElementById('edit-minimo').value = minimo;
             document.getElementById('edit-proveedor').value = proveedor;
+            document.getElementById('edit-familia').value = familia;
             document.getElementById('edit-vence').value = vence;
             document.getElementById('edit-unidad').value = unidad;
             document.getElementById('edit-precio-mayor-bcv').value = p_mayor_bcv;
@@ -753,7 +892,12 @@
             abrirModal('modal-editar-combo');
         }
 
-        // Buscador
+        function abrirModalEditarFamilia(id, nombre) {
+            document.getElementById('edit-fam-id').value = id;
+            document.getElementById('edit-fam-nombre').value = nombre;
+            abrirModal('modal-editar-familia');
+        }
+
         document.getElementById('buscador-entrada').addEventListener('input', function(e) {
             let inputValor = e.target.value;
             let opciones = document.getElementById('opciones-productos').options;
@@ -764,7 +908,6 @@
             }
         });
 
-        // Filtros
         let filtroStockActual = 'todos';
         let filtroVenceActual = 'todos';
 
@@ -780,21 +923,31 @@
         function filtrarInventario() {
             let texto = document.getElementById('buscar-tabla').value.toLowerCase().trim();
             let provId = document.getElementById('filtro-proveedor').value;
+            let famId = document.getElementById('filtro-familia').value;
             let filas = document.querySelectorAll('.fila-producto');
+
+            let contadorVisible = 1;
 
             filas.forEach(fila => {
                 let codigo = fila.querySelector('.col-codigo').innerText.toLowerCase();
                 let nombre = fila.querySelector('.col-nombre').innerText.toLowerCase();
                 let rowProvId = fila.getAttribute('data-prov-id');
+                let rowFamId = fila.getAttribute('data-fam-id');
                 let rowStockStatus = fila.getAttribute('data-stock-status');
                 let rowVenceStatus = fila.getAttribute('data-vence-status');
 
                 let cumpleTexto = (texto === '' || codigo.includes(texto) || nombre.includes(texto));
                 let cumpleProveedor = (provId === '' || rowProvId === provId);
+                let cumpleFamilia = (famId === '' || rowFamId === famId);
                 let cumpleStock = (filtroStockActual === 'todos' || rowStockStatus === filtroStockActual);
                 let cumpleVence = (filtroVenceActual === 'todos' || rowVenceStatus === filtroVenceActual);
 
-                fila.style.display = (cumpleTexto && cumpleProveedor && cumpleStock && cumpleVence) ? '' : 'none';
+                if (cumpleTexto && cumpleProveedor && cumpleFamilia && cumpleStock && cumpleVence) {
+                    fila.style.display = '';
+                    fila.querySelector('.col-num').innerText = contadorVisible++;
+                } else {
+                    fila.style.display = 'none';
+                }
             });
         }
     </script>

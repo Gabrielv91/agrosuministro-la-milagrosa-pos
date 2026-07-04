@@ -48,7 +48,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <link rel="manifest" href="manifest.json">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Título adaptado a La Milagrosa -->
     <title>Agrosuministro La Milagrosa - Acceso al Sistema</title>
     <link rel="stylesheet" href="css/style.css?v=<?php echo time(); ?>">
     <style>
@@ -167,6 +166,28 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         .btn-ingresar:active {
             transform: scale(0.98);
         }
+        
+        /* =========================================================
+           NUEVO: ESTILOS PARA EL BOTÓN DE INSTALACIÓN PWA
+           ========================================================= */
+        .btn-instalar-pwa {
+            width: 100%;
+            background: #f0fdf4;
+            color: #15803d;
+            border: 2px dashed #16a34a;
+            padding: 0.8rem;
+            font-size: 0.95rem;
+            font-weight: 700;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 1.2rem;
+            transition: all 0.2s;
+        }
+        .btn-instalar-pwa:hover {
+            background: #dcfce7;
+            transform: translateY(-1px);
+        }
+        
         .pie-login {
             margin-top: 2rem;
             font-size: 0.8rem;
@@ -179,8 +200,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <div class="tarjeta-autenticacion">
         
         <div class="contenedor-logo">
-            <!-- AQUÍ CARGA EL LOGO DE LA MILAGROSA -->
-            <!-- Guarda la imagen dentro de tu carpeta img/ como logo.png o logo.jpg -->
             <img src="img/logo.png" onerror="this.src='img/logo.jpg'" alt="Agrosuministro La Milagrosa" class="logo-empresa">
             <div class="subtitulo-agro">MAQUINARIA • INSUMOS • ALIMENTOS • VETERINARIA</div>
         </div>
@@ -210,10 +229,46 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             <button type="submit" class="btn-ingresar">Iniciar Sesión</button>
         </form>
 
+        <button type="button" id="btnInstalarApp" class="btn-instalar-pwa" style="display: none;">
+            📲 Instalar App en este Dispositivo
+        </button>
+
         <div class="pie-login">
             LiaPOS &copy; <?php echo date('Y'); ?> - Sistema Inteligente de Ventas
         </div>
     </div>
 
+    <script>
+        let eventoInstalacion = null;
+        const botonInstalar = document.getElementById('btnInstalarApp');
+
+        // Escuchamos cuando el navegador en el VPS con HTTPS esté listo para instalar
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            eventoInstalacion = e;
+            // Hacemos visible el botón con un diseño que combina perfecto
+            botonInstalar.style.display = 'block';
+            console.log("🟢 Listo para instalar LiaPOS nativamente.");
+        });
+
+        // Al hacer clic en el botón de instalar
+        botonInstalar.addEventListener('click', async () => {
+            if (!eventoInstalacion) return;
+            
+            eventoInstalacion.prompt();
+            const { outcome } = await eventoInstalacion.userChoice;
+            
+            if (outcome === 'accepted') {
+                console.log('✅ App instalada exitosamente.');
+                botonInstalar.style.display = 'none';
+            }
+            eventoInstalacion = null;
+        });
+
+        // Si ya lo instalaron o lo abren desde el ícono nativo, ocultar botón
+        window.addEventListener('appinstalled', () => {
+            botonInstalar.style.display = 'none';
+        });
+    </script>
 </body>
 </html>
