@@ -101,7 +101,7 @@ $morosos = $resultado_morosos->fetch_assoc()['total_morosos'];
     <header class="top-bar" style="display: flex; justify-content: space-between; align-items: center;">
         <div style="display: flex; align-items: center; gap: 1rem;">
             <!-- Cambio de nombre a la nueva marca -->
-            <h1>LiaPOS - Agrosuministro La Milagrosa</h1>
+            <h1>Agrosuministro La Milagrosa</h1>
             <span class="badge-rol" style="background-color: var(--primario); color: white;"><?php echo strtoupper($rolUsuario); ?></span>
         </div>
         
