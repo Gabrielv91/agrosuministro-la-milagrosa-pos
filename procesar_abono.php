@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $usuario_id = $_SESSION['usuario_id']; // El cajero que recibe el dinero
 
     // =========================================================================
-// PASO 2: VERIFICACIÓN Y CREACIÓN DE CARPETA EN LA NUBE + GUARDADO DE FOTO
+// PASO 2: VERIFICACIÓN Y CREACIÓN DE CARPETA EN LA NUBE + GUARDADO DE FOTO hola
 // =========================================================================
 $ruta_foto_abono = ''; // Vacío por si no adjuntan foto
 
