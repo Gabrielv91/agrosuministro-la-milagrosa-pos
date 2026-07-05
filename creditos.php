@@ -124,7 +124,7 @@ if (isset($_POST['eliminar_abono'])) {
 }
 
 // ========================================================================
-// 4. CONSULTA ÉLITE ACTUALIZADA
+// 4. CONSULTA ÉLITE ACTUALIZADA (CORREGIDA)
 // ========================================================================
 $conexion->query("SET SESSION group_concat_max_len = 10000;");
 
@@ -154,7 +154,7 @@ $query_creditos = "
             SELECT GROUP_CONCAT(CONCAT(ha.id, '☻', ha.monto_usd, '☻', ha.metodo_pago, '☻', IFNULL(ha.referencia, ''), '☻', DATE_FORMAT(ha.fecha, '%d/%m/%Y %h:%i %p')) ORDER BY ha.fecha DESC SEPARATOR '◘')
             FROM historico_abonos ha
             JOIN ventas v3 ON ha.venta_id = v3.id
-            WHERE v3.cliente_id = c.id
+            WHERE v3.cliente_id = c.id AND v3.deuda_usd > 0
         ), 'Ninguno') as historial_abonos
     FROM clientes c
     JOIN ventas v ON c.id = v.cliente_id
