@@ -169,7 +169,7 @@ $resultado = $conexion->query($query_creditos);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agrosuministro La Milagrosa</title>
+    <title>AGROSUMINISTRO LA MILAGROSA</title>
     <link rel="stylesheet" href="css/style.css?v=<?php echo time(); ?>">
     <style>
         .pantalla-completa { padding: 2rem; max-width: 1200px; margin: 0 auto; }
@@ -236,7 +236,7 @@ $resultado = $conexion->query($query_creditos);
         $tlf_limpio = preg_replace('/[^0-9]/', '', $telefono);
         if (strpos($tlf_limpio, '0') === 0) $tlf_limpio = '58' . substr($tlf_limpio, 1);
         
-        $texto_wa = "Hola *" . trim($cliente['nombre']) . "*, te saludamos de *Agrosuministro La Milagrosa* para compartirte el balance de tu cuenta.\n\n";
+        $texto_wa = "Hola *" . trim($cliente['nombre']) . "*, te saludamos de *AGROSUMINISTRO LA MILAGROSA* para compartirte el balance de tu cuenta.\n\n";
         $texto_wa .= "🔹 *Facturas Pendientes:*\n";
         
         $cli_id = $cliente['id'];
@@ -440,7 +440,7 @@ $resultado = $conexion->query($query_creditos);
                 metodoSelect.innerHTML += `<option value="${prefijo}otro">Otro</option>`;
             } else {
                 metodoSelect.innerHTML += `<option value="${prefijo}pago_movil">Pago Móvil</option>`;
-                metodoSelect.innerHTML += `<option value="${prefijo}punto">Punto de Venta</option>`;
+                metodoSelect.innerHTML += `<option value="${prefijo}punto_venta">Punto de Venta</option>`;
                 metodoSelect.innerHTML += `<option value="${prefijo}biopago">Biopago</option>`;
                 metodoSelect.innerHTML += `<option value="${prefijo}efectivo_bs">Efectivo Bs</option>`;
                 metodoSelect.innerHTML += `<option value="${prefijo}transferencia_bs">Transferencia Bs</option>`;

@@ -200,7 +200,7 @@ $morosos = $resultado_morosos->fetch_assoc()['total_morosos'];
                 }
 
                 // NUEVO MENSAJE: Adaptado a AGROSUMINISTRO LA MILAGROSA, C.A con los datos del Provincial
-                let mensaje = `¡Hola! Te saludamos de *AGROSUMINISTRO LA MILAGROSA*\n📄 Rif 197839330\n\nAquí tienes nuestros datos para realizar tu Pago Móvil:\n\n🏦 *Banco Banesco (0134)*\n📄 C.I: V-19.783.933\n📱 Cel: 0414-5747277 \n\nPor favor, envíanos el número de referencia una vez realizada la transferencia. ¡Gracias por tu compra! ✅`;
+                let mensaje = `¡Hola! Te saludamos de *AGROSUMINISTRO LA MILAGROSA*\n📄 Rif 197839330\n\nAquí tienes nuestros datos para realizar tu Pago Móvil:\n\n🏦 *Banco Banesco (0134)*\n📄 C.I: V-19.783.933\n📱 Cel: 0414-5747277 \n\n🏦 *Cuenta Banesco*\n0134-0219-15-2191059408\n V-19.783.933\n\nPor favor, envíanos el número de referencia una vez realizada la transferencia. ¡Gracias por tu compra! ✅`;
 
                 // Codificar para URL
                 let textoCodificado = encodeURIComponent(mensaje);

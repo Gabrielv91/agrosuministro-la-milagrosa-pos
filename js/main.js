@@ -195,7 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const pCred = document.getElementById('panel-credito');
             if(pRef) pRef.style.display = 'none'; if(pMix) pMix.style.display = 'none'; if(pCred) pCred.style.display = 'none';
             
-            if (met === 'pago_movil' || met === 'biopago' || met === 'punto_venta') { if(pRef) pRef.style.display = 'block'; } 
+            if (met === 'pago_movil') { if(pRef) pRef.style.display = 'block'; } 
             else if (met === 'mixto') { 
                 if(pMix) pMix.style.display = 'block'; 
                 if(pRef) pRef.style.display = 'block'; // Pedir referencia por si hubo transferencias
@@ -301,7 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 referenciaFinal = refAbonoElement ? refAbonoElement.value.trim() : '';
             } else {
                 abonoUsd = totalCompraUsd; 
-                if (metodoOriginal === 'pago_movil' || metodoOriginal === 'biopago' || metodoOriginal === 'punto_venta' || metodoOriginal === 'mixto') {
+                if (metodoOriginal === 'pago_movil') {
                     const refPrinElement = document.getElementById('referencia-principal');
                     if (refPrinElement && refPrinElement.value.trim() === '') {
                         alert('⚠️ El número de referencia bancaria es obligatorio.'); refPrinElement.focus(); return;

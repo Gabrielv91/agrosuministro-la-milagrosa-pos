@@ -60,7 +60,7 @@ $resultado_productos = $conexion->query($query_productos);
     <header class="top-bar">
         <div style="display: flex; align-items: center; gap: 1rem;">
             <a href="menu.php" style="text-decoration: none; font-size: 1.5rem; color: var(--texto-principal);" title="Volver al Menú Principal">⬅️</a>
-            <h1> AGROSUMINISTRO LA MILAGROSA</h1>
+            <h1>Agrosuministro La Milagrosa</h1>
         </div>
 
         <div style="display: flex; align-items: center; gap: 2rem;">
@@ -94,7 +94,6 @@ $resultado_productos = $conexion->query($query_productos);
                         $tipo_unidad = $producto['tipo_unidad'];
                         $stock = $producto['stock'];
                         
-                        // Mapeo dinámico de precios en base de datos
                         $p_bcv_detal = floatval($producto['precio_usd']);
                         $p_bcv_mayor = floatval($producto['precio_mayor_bcv'] > 0 ? $producto['precio_mayor_bcv'] : $p_bcv_detal);
                         $p_efec_detal = floatval($producto['precio_efectivo_detal'] > 0 ? $producto['precio_efectivo_detal'] : $p_bcv_detal);
@@ -187,9 +186,7 @@ $resultado_productos = $conexion->query($query_productos);
                     <label class="caja-pago"><input type="radio" name="metodo-pago" value="punto_venta"><div class="contenido-caja">💳 Punto Venta</div></label>
                     <label class="caja-pago"><input type="radio" name="metodo-pago" value="pago_movil"><div class="contenido-caja">📱 Pago Móvil</div></label>
                     <label class="caja-pago"><input type="radio" name="metodo-pago" value="biopago"><div class="contenido-caja">👆 Biopago</div></label>
-                    
                     <label class="caja-pago"><input type="radio" name="metodo-pago" value="mixto"><div class="contenido-caja">🔄 Pago Mixto</div></label>
-                    
                     <label class="caja-pago"><input type="radio" name="metodo-pago" value="otro" data-id="radio-otro"><div class="contenido-caja">💳 Otro</div></label>
                     <label class="caja-pago"><input type="radio" name="metodo-pago" value="credito"><div class="contenido-caja">📒 A Crédito</div></label>
                 </div>
@@ -236,7 +233,7 @@ $resultado_productos = $conexion->query($query_productos);
                 </div>
 
                 <div id="panel-referencia-principal" style="display: none; margin-top: 1rem; background: #f8fafc; padding: 1rem; border-radius: 6px; border: 1px solid var(--borde);">
-                    <label style="font-weight: bold; color: var(--texto-secundario); font-size: 0.9rem;">N° de Referencia (Obligatorio):</label>
+                    <label style="font-weight: bold; color: var(--texto-secundario); font-size: 0.9rem;">N° de Referencia de Pago Móvil:</label>
                     <input type="text" id="referencia-principal" placeholder="Ingrese los últimos dígitos" class="input-cliente" style="margin-top: 0.5rem; background: white; font-size: 16px;">
                 </div>
 
@@ -246,8 +243,13 @@ $resultado_productos = $conexion->query($query_productos);
                         <video id="video-camara" autoplay playsinline></video>
                         <canvas id="canvas-camara" style="display:none;"></canvas>
                         <img id="foto-preview" />
+                        
                         <button type="button" id="btn-tomar-foto" class="btn-login" style="background: #3b82f6; margin-top: 0.8rem; width: 100%;">📸 Capturar Foto</button>
+                        
+                        <button type="button" id="btn-cambiar-camara" class="btn-login" style="background: #64748b; margin-top: 0.5rem; width: 100%;">🔄 Cambiar Cámara Frontal/Trasera</button>
+                        
                         <button type="button" id="btn-retomar-foto" class="btn-login" style="background: #f59e0b; margin-top: 0.8rem; width: 100%; display:none;">🔄 Volver a Tomar</button>
+                        
                         <input type="hidden" id="foto_base64" name="foto_base64">
                     </div>
 
@@ -266,7 +268,7 @@ $resultado_productos = $conexion->query($query_productos);
                             <option value="efectivo_usd">Efectivo $</option>
                             <option value="efectivo_bs">Efectivo Bs</option>
                             <option value="pago_movil">Pago Móvil</option>
-                            <option value="biopago">Biopago</option>
+                            <option value="punto_venta">Punto de Venta</option> <option value="biopago">Biopago</option>
                             <option value="otro">Otro</option>
                         </select>
                         <input type="text" id="referencia-abono" placeholder="N° de Referencia del Abono" class="input-cliente" style="display: none; margin-bottom: 1rem; font-size: 16px;">
@@ -289,7 +291,29 @@ $resultado_productos = $conexion->query($query_productos);
     <script src="js/main.js?v=<?php echo time(); ?>"></script>
     <script>
         let streamCamara = null;
+        let modoCamara = 'user'; // 'user' para cámara frontal, 'environment' para cámara trasera
         const tasaDelDia = <?php echo floatval($tasa); ?>;
+
+        // FUNCIÓN QUE ARREGLA LA DIFERENCIA MATEMÁTICA EN LA PANTALLA
+        function corregirRedondeoGlobal() {
+            let elemUsd = document.getElementById('total-usd');
+            let elemBs = document.getElementById('total-bs');
+            if (elemUsd && elemBs) {
+                let txtUsd = elemUsd.innerText.replace('$', '').trim();
+                let valUsd = parseFloat(txtUsd) || 0;
+                if (valUsd > 0) {
+                    let exactoBs = valUsd * tasaDelDia;
+                    elemBs.innerText = exactoBs.toLocaleString('es-VE', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' Bs';
+                }
+            }
+        }
+
+        // Observador que actualiza el Bs global cada vez que main.js toca los montos
+        const observadorTotal = new MutationObserver(() => corregirRedondeoGlobal());
+        document.addEventListener("DOMContentLoaded", () => {
+            let elemUsd = document.getElementById('total-usd');
+            if(elemUsd) observadorTotal.observe(elemUsd, { childList: true, characterData: true, subtree: true });
+        });
 
         // FUNCIÓN MAESTRA QUE RECALCULA PRECIOS SEGÚN LA LISTA SELECCIONADA
         function recalcularPreciosPorTarifa() {
@@ -305,67 +329,109 @@ $resultado_productos = $conexion->query($query_productos);
                 else if (tarifa === 'efectivo_detal') nuevoPrecioUsd = parseFloat(tarjeta.getAttribute('data-precio-efectivo-detal'));
                 else if (tarifa === 'efectivo_mayor') nuevoPrecioUsd = parseFloat(tarjeta.getAttribute('data-precio-efectivo-mayor'));
 
-                // Actualizar valor en el atributo activo que lee tu archivo main.js externo
                 tarjeta.setAttribute('data-precio', nuevoPrecioUsd);
                 
-                // Refrescar los textos en la pantalla
                 let txtUsd = document.getElementById(`render-precio-usd-${id}`);
                 let txtBs = document.getElementById(`render-precio-bs-${id}`);
                 if(txtUsd) txtUsd.innerText = `$${nuevoPrecioUsd.toFixed(2)} / ${tarjeta.getAttribute('data-unidad') === 'kg' ? 'Kg' : (tarjeta.getAttribute('data-unidad') === 'm' ? 'm' : 'Und')}`;
                 if(txtBs) txtBs.innerText = `${(nuevoPrecioUsd * tasaDelDia).toLocaleString('es-VE', {minimumFractionDigits: 2, maximumFractionDigits: 2})} Bs`;
             });
 
-            // Disparar recálculo automático del carrito si tu main.js tiene la función global
-            if (typeof actualizarTotalesCarrito === 'function') {
-                actualizarTotalesCarrito();
-            } else if (typeof calcularTotales === 'function') {
-                calcularTotales();
-            }
+            if (typeof actualizarTotalesCarrito === 'function') actualizarTotalesCarrito();
+            else if (typeof calcularTotales === 'function') calcularTotales();
+            setTimeout(corregirRedondeoGlobal, 50);
         }
 
-        // Automatizar el cambio de tarifa visual cuando el cajero pulsa los radios de pago
-        document.querySelectorAll('input[name="metodo-pago"]').forEach(radio => {
-            radio.addEventListener('change', function() {
-                const selector = document.getElementById('modalidad-tarifa');
-                
-                if (this.value === 'efectivo_usd') {
-                    selector.value = 'efectivo_detal'; // Si presiona Efectivo $, sugerir tarifa efectivo
-                } else if (this.value === 'punto_venta' || this.value === 'pago_movil' || this.value === 'biopago') {
-                    selector.value = 'bcv_detal'; // Si es tarjeta/pago móvil, sugerir bcv
-                }
-                recalcularPreciosPorTarifa();
+        document.getElementById('modalidad-tarifa').addEventListener('change', recalcularPreciosPorTarifa);
 
-                const panelRefPrin = document.getElementById('panel-referencia-principal');
-                const panelOtro = document.getElementById('panel-otro-detalle');
-                const panelCredito = document.getElementById('panel-credito');
-                
-                panelRefPrin.style.display = 'none'; panelOtro.style.display = 'none'; panelCredito.style.display = 'none';
-                document.getElementById('referencia-principal').value = '';
-                detenerCamara();
-
-                if (this.value === 'pago_movil' || this.value === 'biopago' || this.value === 'punto_venta') {
-                    panelRefPrin.style.display = 'block';
-                } else if (this.value === 'otro' || this.value.startsWith('otro_')) {
-                    panelOtro.style.display = 'block';
-                } else if (this.value === 'credito') {
-                    panelCredito.style.display = 'block';
-                    iniciarCamara();
+        // CHEQUEO DINÁMICO DE REFERENCIA EN PAGO MIXTO
+        document.querySelectorAll('.input-mixto').forEach(input => {
+            input.addEventListener('input', function() {
+                const metodo = document.querySelector('input[name="metodo-pago"]:checked')?.value;
+                if (metodo === 'mixto') {
+                    let valPM = parseFloat(document.getElementById('mix-pm-bs').value) || 0;
+                    document.getElementById('panel-referencia-principal').style.display = (valPM > 0) ? 'block' : 'none';
                 }
             });
         });
 
+        // CONTROL CENTRAL DE VISIBILIDAD DE PANELS
+        function actualizarPanelesPago() {
+            const val = document.querySelector('input[name="metodo-pago"]:checked')?.value;
+            const panelRefPrin = document.getElementById('panel-referencia-principal');
+            const panelOtro = document.getElementById('panel-otro-detalle');
+            const panelCredito = document.getElementById('panel-credito');
+            const panelMixto = document.getElementById('panel-pago-mixto');
+            
+            // Ocultar absolutamente todos los paneles secundarios por defecto
+            panelRefPrin.style.display = 'none'; 
+            panelOtro.style.display = 'none'; 
+            panelCredito.style.display = 'none';
+            if(panelMixto) panelMixto.style.display = 'none';
+            
+            if (val !== 'pago_movil' && val !== 'mixto') {
+                document.getElementById('referencia-principal').value = '';
+            }
+            if (val !== 'credito') detenerCamara();
+
+            // 🚨 REGLA ESTRICTA: SÓLO PAGO MÓVIL MUESTRA LA CAJA DE REFERENCIA
+            if (val === 'pago_movil') {
+                panelRefPrin.style.display = 'block';
+            } else if (val === 'mixto') {
+                if(panelMixto) panelMixto.style.display = 'block';
+                let valPM = parseFloat(document.getElementById('mix-pm-bs').value) || 0;
+                if (valPM > 0) panelRefPrin.style.display = 'block';
+            } else if (val === 'otro' || (val && val.startsWith('otro_'))) {
+                panelOtro.style.display = 'block';
+            } else if (val === 'credito') {
+                panelCredito.style.display = 'block';
+                iniciarCamara();
+            }
+        }
+
+        // Automatizar el cambio de tarifa visual y controlar los paneles de pago al tocar un radio
+        document.querySelectorAll('input[name="metodo-pago"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const selector = document.getElementById('modalidad-tarifa');
+                if (this.value === 'efectivo_usd') selector.value = 'efectivo_detal';
+                else if (this.value === 'punto_venta' || this.value === 'pago_movil' || this.value === 'biopago') selector.value = 'bcv_detal';
+                
+                recalcularPreciosPorTarifa();
+                actualizarPanelesPago();
+            });
+        });
+
+        // ==========================================
+        // CÁMARA Y CAPTURA FOTOGRÁFICA
+        // ==========================================
         function iniciarCamara() {
             const video = document.getElementById('video-camara');
             video.setAttribute('playsinline', ''); 
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+                // Pasamos la variable modoCamara dinámicamente
+                navigator.mediaDevices.getUserMedia({ video: { facingMode: modoCamara } })
                 .then(function(stream) { streamCamara = stream; video.srcObject = stream; })
-                .catch(function(err) { console.error(err); });
+                .catch(function(err) { 
+                    console.error("Error de cámara:", err);
+                    alert("⚠️ No se pudo acceder a la cámara. Verifica los permisos en el navegador.");
+                });
+            } else {
+                alert("🚫 Tu navegador o conexión no permite el uso de cámaras web.");
             }
         }
 
         function detenerCamara() {
             if (streamCamara) { streamCamara.getTracks().forEach(track => track.stop()); streamCamara = null; }
+        }
+
+        // Evento para alternar entre cámara frontal y trasera
+        const btnCambiarCamara = document.getElementById('btn-cambiar-camara');
+        if (btnCambiarCamara) {
+            btnCambiarCamara.addEventListener('click', function() {
+                modoCamara = (modoCamara === 'user') ? 'environment' : 'user';
+                detenerCamara();
+                iniciarCamara();
+            });
         }
 
         document.getElementById('btn-tomar-foto').addEventListener('click', function() {
@@ -378,12 +444,14 @@ $resultado_productos = $conexion->query($query_productos);
             document.getElementById('foto_base64').value = dataURL;
             preview.src = dataURL; video.style.display = 'none'; preview.style.display = 'block';
             this.style.display = 'none'; document.getElementById('btn-retomar-foto').style.display = 'block';
+            if(btnCambiarCamara) btnCambiarCamara.style.display = 'none';
         });
 
         document.getElementById('btn-retomar-foto').addEventListener('click', function() {
             document.getElementById('video-camara').style.display = 'block';
             document.getElementById('foto-preview').style.display = 'none';
             document.getElementById('btn-tomar-foto').style.display = 'block';
+            if(btnCambiarCamara) btnCambiarCamara.style.display = 'block';
             this.style.display = 'none'; document.getElementById('foto_base64').value = ''; 
         });
 
@@ -397,12 +465,20 @@ $resultado_productos = $conexion->query($query_productos);
 
         function validarCheckoutAntesDeGuardar(evento) {
             const metodoSeleccionado = document.querySelector('input[name="metodo-pago"]:checked');
-            if (metodoSeleccionado && (metodoSeleccionado.value === 'pago_movil' || metodoSeleccionado.value === 'biopago' || metodoSeleccionado.value === 'punto_venta')) {
-                if (document.getElementById('referencia-principal').value.trim() === '') {
-                    alert("⚠️ Por favor, ingrese el número de referencia de la transacción bancaria.");
-                    evento.stopImmediatePropagation(); return false;
-                }
+            
+            // 🚨 BLINDAJE FINAL: SÓLO EXIGE REFERENCIA SI ES PAGO MÓVIL DIRECTO O MIXTO CON PAGO MÓVIL
+            let exigeRef = false;
+            if (metodoSeleccionado && metodoSeleccionado.value === 'pago_movil') exigeRef = true;
+            if (metodoSeleccionado && metodoSeleccionado.value === 'mixto') {
+                let valPM = parseFloat(document.getElementById('mix-pm-bs').value) || 0;
+                if (valPM > 0) exigeRef = true;
             }
+
+            if (exigeRef && document.getElementById('referencia-principal').value.trim() === '') {
+                alert("⚠️ Por favor, ingrese el número de referencia del Pago Móvil.");
+                evento.stopImmediatePropagation(); return false;
+            }
+
             if (metodoSeleccionado && metodoSeleccionado.value === 'credito') {
                 if (document.getElementById('foto_base64').value === '') {
                     alert("🚫 ¡Cámara Obligatoria! Tómale una foto al cliente con la mercancía antes de fiar.");
