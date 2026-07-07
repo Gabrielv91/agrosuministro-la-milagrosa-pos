@@ -441,13 +441,33 @@ $resultado_productos = $conexion->query($query_productos);
             if (streamCamara) { streamCamara.getTracks().forEach(track => track.stop()); streamCamara = null; }
         }
 
-        // Evento para alternar entre cámara frontal y trasera
+        // 🔄 MANEJADOR DEL BOTÓN DE CAMBIO DE CÁMARA (OPTIMIZADO PARA TABLETS)
         const btnCambiarCamara = document.getElementById('btn-cambiar-camara');
         if (btnCambiarCamara) {
             btnCambiarCamara.addEventListener('click', function() {
+                // 1. Bloqueamos el botón temporalmente y cambiamos el texto para que el cajero sepa que está cargando
+                btnCambiarCamara.disabled = true;
+                btnCambiarCamara.innerText = "⏳ Cambiando lente...";
+                btnCambiarCamara.style.opacity = "0.7";
+
+                // 2. Alternar la configuración de la variable
                 modoCamara = (modoCamara === 'user') ? 'environment' : 'user';
+                
+                // 3. Detener la cámara actual liberando los recursos por completo
                 detenerCamara();
-                iniciarCamara();
+                
+                // 4. Aumentamos el tiempo a 600ms para que las tablets lentas logren soltar el hardware
+                setTimeout(() => {
+                    iniciarCamara();
+                    
+                    // 5. Devolvemos el botón a la normalidad un segundo después
+                    setTimeout(() => {
+                        btnCambiarCamara.disabled = false;
+                        btnCambiarCamara.innerText = "🔄 Cambiar Cámara Frontal/Trasera";
+                        btnCambiarCamara.style.opacity = "1";
+                    }, 1000);
+                    
+                }, 600); 
             });
         }
 
