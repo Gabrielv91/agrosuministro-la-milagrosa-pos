@@ -407,16 +407,33 @@ $resultado_productos = $conexion->query($query_productos);
         function iniciarCamara() {
             const video = document.getElementById('video-camara');
             video.setAttribute('playsinline', ''); 
+            
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                // Pasamos la variable modoCamara dinámicamente
-                navigator.mediaDevices.getUserMedia({ video: { facingMode: modoCamara } })
-                .then(function(stream) { streamCamara = stream; video.srcObject = stream; })
+                // Usamos 'ideal' para no obligar al teléfono y evitar que colapse
+                let opcionesCamara = { video: { facingMode: { ideal: modoCamara } } };
+                
+                navigator.mediaDevices.getUserMedia(opcionesCamara)
+                .then(function(stream) { 
+                    streamCamara = stream; 
+                    video.srcObject = stream; 
+                })
                 .catch(function(err) { 
-                    console.error("Error de cámara:", err);
-                    alert("⚠️ No se pudo acceder a la cámara. Verifica los permisos en el navegador.");
+                    console.warn("Fallo modo ideal, intentando cámara básica...", err);
+                    
+                    // PLAN B: Si el teléfono rechaza frontal/trasera, abrimos la que sea por defecto
+                    navigator.mediaDevices.getUserMedia({ video: true })
+                    .then(function(streamFallback) {
+                        streamCamara = streamFallback; 
+                        video.srcObject = streamFallback; 
+                    })
+                    .catch(function(errFallback) {
+                        console.error("Error definitivo:", errFallback);
+                        // Alerta con el nombre exacto del error para saber qué pasa
+                        alert("⚠️ Error (" + errFallback.name + "): El navegador bloqueó la cámara. Toca el icono del Candado 🔒 arriba en la barra de dirección y asegúrate de que la cámara esté en 'Permitir'.");
+                    });
                 });
             } else {
-                alert("🚫 Tu navegador o conexión no permite el uso de cámaras web.");
+                alert("🚫 Tu navegador no soporta cámaras web o la conexión no es segura (HTTPS).");
             }
         }
 
