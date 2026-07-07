@@ -204,7 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } 
             else if (met === 'credito') { 
                 if(pCred) pCred.style.display = 'block'; 
-                if(typeof iniciarCamara === 'function') iniciarCamara(); 
+               // if(typeof iniciarCamara === 'function') iniciarCamara(); 
             }
             if(met !== 'credito' && typeof detenerCamara === 'function') detenerCamara();
             calcularDeuda();
